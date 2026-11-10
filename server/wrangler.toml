@@ -1,0 +1,17 @@
+name = "family-book"
+main = "src/index.js"
+compatibility_date = "2025-10-01"
+workers_dev = true
+
+[observability]
+enabled = true
+
+# 가계부 하나 = Durable Object 하나 (가계부 코드로 찾아감)
+[[durable_objects.bindings]]
+name = "FAMILY"
+class_name = "Family"
+
+# 무료 플랜은 SQLite 저장소를 쓰는 Durable Object만 가능
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Family"]
