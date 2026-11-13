@@ -1,5 +1,5 @@
-// 우리집 가계부 서버 — Cloudflare Workers + Durable Objects(SQLite)
-// 가계부 하나가 Durable Object 하나. 가계부 코드(6자리)로 찾아가고, 가족 암호로 들어감.
+// 우리집 서랍 서버 (지금은 가계부) — Cloudflare Workers + Durable Objects(SQLite)
+// 서랍(가족) 하나가 Durable Object 하나. 우리집 코드(6자리)로 찾아가고, 가족 암호로 들어감.
 import { DurableObject } from "cloudflare:workers";
 
 const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -99,7 +99,7 @@ export default {
       if (path === "/api/join" && request.method === "POST") {
         const body = await request.json().catch(() => ({}));
         const code = String(body.code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-        if (code.length !== 6) return fail(400, "가계부 코드는 6자리예요");
+        if (code.length !== 6) return fail(400, "우리집 코드는 6자리예요");
         const stub = env.FAMILY.get(env.FAMILY.idFromName(code));
         const res = await stub.join(body);
         if (res.error) return fail(res.status || 400, res.error);
@@ -163,7 +163,7 @@ export class Family extends DurableObject {
 
   async create(code, body) {
     if (this.get("name")) return { error: "taken" };
-    const name = cleanText(body.name, 20) || "우리집 가계부";
+    const name = cleanText(body.name, 20) || "우리집 서랍";
     const member = cleanName(body.member);
     const pass = typeof body.pass === "string" ? body.pass : "";
     if (!member) return { error: "내 이름(호칭)을 적어 주세요" };
@@ -181,7 +181,7 @@ export class Family extends DurableObject {
   }
 
   async join(body) {
-    if (!this.get("name")) return { error: "그런 가계부가 없어요. 코드를 확인해 주세요", status: 404 };
+    if (!this.get("name")) return { error: "그런 서랍이 없어요. 코드를 확인해 주세요", status: 404 };
     const lock = this.get("lock", { fails: 0, until: 0 });
     if (lock.until > this.now()) {
       const min = Math.ceil((lock.until - this.now()) / 60000);

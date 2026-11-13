@@ -1,14 +1,16 @@
-# 🏠 우리집 가계부
+# 🗄️ 우리집 서랍
 
-가족이 함께 쓰는 무료 가계부. 누가 적어도 모두의 휴대폰에 바로 보여요.
+가족이 함께 쓰는 우리집 서랍. 지금은 가계부부터 — 누가 적어도 모두의 휴대폰에 바로 보여요.
+앞으로 가족 사진함, 주차 위치 공유를 같은 서랍에 넣을 예정이에요. (저장소 이름은 처음 이름 그대로 family-book)
 
 - 화면: https://2juwon.github.io/family-book/
 - 서버: https://family-book.2juwon.workers.dev (Cloudflare Workers + Durable Objects, 무료 플랜)
 
 ## 쓰는 법
-1. 한 사람이 **새로 만들기** — 가계부 이름, 가족 암호, 내 호칭(아빠·엄마…)
+1. 한 사람이 **새로 만들기** — 서랍 이름, 가족 암호, 내 호칭(아빠·엄마…)
 2. 설정 → **가족 초대하기**에서 링크를 보내고, 가족 암호는 따로 알려 주기
-3. 가족은 링크를 열고 암호와 호칭을 넣으면 같은 가계부를 봄
+3. 가족은 링크를 열고 암호와 호칭을 넣으면 같은 서랍을 봄
+4. **앱으로 설치**: 시작 화면·설정의 '앱으로 설치하기' (안드로이드 크롬은 설치 창, 아이폰은 Safari 공유 → 홈 화면에 추가 안내)
 
 ## 기능 (1차)
 - 지출·수입 기록: 금액(+1천·+1만… 빠른 버튼), 분류 아이콘, 날짜, 결제(카드·현금·이체), 메모, 적은 사람
@@ -21,12 +23,14 @@
 
 ## 다음 단계
 - 📷 가족 사진함 — 구글 드라이브 같은 저장공간에 연결해 사진 보관·공유
+- 🚗 주차 위치 — 차를 어디 댔는지 가족 모두 확인
 
 ## 구조
 - `index.html` — 화면 전체(라이브러리 없음, 글꼴만 Pretendard CDN). 서버 주소는 위쪽 `PROD_API`, `?api=` 로 바꿔 시험 가능
+- 앱 설치(PWA): `manifest.webmanifest`(scope /family-book/), `sw.js`(캐시 family-book-v1 — 같은 사이트 GET만 네트워크 먼저·안 되면 저장본, 서버 API는 안 건드림. 이름 바꾸면 예전 저장본 지움), 아이콘 `icon-192.png`·`icon-512.png`(마스커블)·`apple-touch-icon.png` — `python3 tools/icons.py`로 다시 만듦
 - `server/src/index.js` — Worker(입구) + `Family` Durable Object(가계부 하나 = 코드 하나, SQLite 표: meta·sessions·entries·fixed·fixed_applied)
 - 보안: 암호는 PBKDF2(10만 번)로만 저장, 8번 틀리면 10분 잠금, 기기마다 로그인 열쇠(token)
-- 시험: `server/test/api.test.mjs`(API 31개), `test/e2e.py`(브라우저 20개)
+- 시험: `server/test/api.test.mjs`(API 31개), `test/e2e.py`(브라우저 20개), `test/pwa.py`(설치 조건·끊긴 상태 열기·아이폰 안내)
 
 ## 배포
 - 화면: 저장소 Settings → Pages → `main` / root
