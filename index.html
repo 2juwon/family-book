@@ -264,12 +264,20 @@ function toast(msg) {
 const INSTALL = { prompt: null };
 const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-const canInstall = () => !isStandalone() && (INSTALL.prompt || isIOS());
+// 설치 버튼은 앱으로 열린 게 아니면 늘 보여 줌.
+// 크롬은 화면을 누르고 30초쯤 지나야 설치 창(beforeinstallprompt)을 열어 주므로, 그 전엔 메뉴로 설치하는 방법을 안내
+const canInstall = () => !isStandalone();
+const UA = navigator.userAgent;
+const inApp = () => /kakaotalk|naver\(inapp|instagram|fban|fbav|line\/|daumapps|everytimeapp|band\//i.test(UA);
+const isKakao = () => /kakaotalk/i.test(UA);
+const isAndroid = () => /android/i.test(UA);
+const isSamsung = () => /samsungbrowser/i.test(UA);
 // 크롬 기본 설치 안내도 그대로 뜨게 preventDefault는 하지 않음 — 이벤트만 잡아 둠
 // 시작 화면에선 입력 중인 글이 지워지지 않게 버튼만 보이고 숨김
 function installChanged() {
   if (!S.auth) { const b = $("#startInstall"); if (b) b.hidden = !canInstall(); }
   else if (S.tab === "set") render();
+  const go = $("#promptNow"); if (go) go.hidden = !INSTALL.prompt;
 }
 window.addEventListener("beforeinstallprompt", (e) => { INSTALL.prompt = e; installChanged(); });
 window.addEventListener("appinstalled", () => { INSTALL.prompt = null; installChanged(); toast("홈 화면에 설치했어요"); });
@@ -279,25 +287,52 @@ function installCard() {
     <img src="icon-192.png" alt=""><span style="flex:1"><b>앱으로 설치하기</b><span>홈 화면에서 바로 열어요</span></span><span class="go">설치</span>
   </button></div>`;
 }
+async function promptInstall() {
+  const p = INSTALL.prompt; if (!p) return;
+  p.prompt();
+  const r = await p.userChoice.catch(() => null);
+  if (r?.outcome === "accepted") { INSTALL.prompt = null; closeSheet(); }
+  installChanged();
+}
+// 카톡 등 앱 안 브라우저 → 바깥 브라우저(크롬·Safari)로 열기
+function openOutside() {
+  const url = location.origin + location.pathname + (S.auth ? "" : location.search);
+  if (isKakao()) { location.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(url); return; }
+  if (isAndroid()) { location.href = "intent://" + url.replace(/^https?:\/\//, "") + "#Intent;scheme=https;package=com.android.chrome;end"; return; }
+  navigator.clipboard?.writeText(url).then(() => toast("주소를 복사했어요. Safari에 붙여 넣어 주세요")).catch(() => {});
+}
 async function doInstall() {
-  if (INSTALL.prompt) {
-    const p = INSTALL.prompt;
-    p.prompt();
-    const r = await p.userChoice.catch(() => null);
-    if (r?.outcome === "accepted") INSTALL.prompt = null;
-    installChanged();
-    return;
-  }
-  const ipad = /ipad/i.test(navigator.userAgent) || navigator.maxTouchPoints > 1 && !/iphone/i.test(navigator.userAgent);
-  const safari = !/crios|fxios|edgios|kakaotalk|naver|instagram|fban|line/i.test(navigator.userAgent);
-  openSheet(`<h2>홈 화면에 추가하기<button data-close aria-label="닫기">✕</button></h2>
-    ${safari ? "" : `<div class="soon" style="margin-bottom:10px;color:var(--bad)">지금 앱 안 브라우저(카톡 등)로 열려 있어요. 오른쪽 아래·위 메뉴에서 <b>Safari로 열기</b>를 먼저 눌러 주세요.</div>`}
-    <ol class="steps">
+  if (INSTALL.prompt && !inApp()) return promptInstall();
+  const ios = isIOS();
+  const ipad = /ipad/i.test(UA) || (navigator.maxTouchPoints > 1 && !/iphone/i.test(UA));
+  const browser = ios ? "Safari" : "크롬", browserTo = ios ? "Safari로" : "크롬으로";
+  let steps;
+  if (ios) steps = `
       <li>Safari ${ipad ? "주소창 오른쪽" : "아래쪽"}의 <b>공유 버튼</b>(네모에 위 화살표)을 눌러요</li>
       <li>목록을 내려 <b>홈 화면에 추가</b>를 눌러요</li>
-      <li>오른쪽 위 <b>추가</b>를 누르면 끝!</li>
-    </ol>
-    <button class="btn mt" data-close>알겠어요</button>`);
+      <li>오른쪽 위 <b>추가</b>를 누르면 끝!</li>`;
+  else if (isSamsung()) steps = `
+      <li>아래쪽 <b>≡ 메뉴</b>를 눌러요</li>
+      <li><b>현재 페이지 추가</b> → <b>홈 화면</b>을 눌러요</li>`;
+  else if (isAndroid()) steps = `
+      <li>크롬 오른쪽 위 <b>⋮ 메뉴</b>를 눌러요</li>
+      <li><b>앱 설치</b>(또는 <b>홈 화면에 추가</b> → <b>설치</b>)를 눌러요</li>
+      <li>홈 화면에 생긴 <b>우리집 서랍</b> 아이콘으로 열면 끝!</li>`;
+  else steps = `
+      <li>주소창 오른쪽의 <b>설치 아이콘</b>(모니터에 아래 화살표)을 눌러요</li>
+      <li>안 보이면 오른쪽 위 <b>⋮ 메뉴</b> → <b>전송, 저장, 공유</b> → <b>페이지를 앱으로 설치</b></li>
+      <li><b>설치</b>를 누르면 바탕화면·작업 표시줄에서 열 수 있어요</li>`;
+  openSheet(`<h2>앱으로 설치하기<button data-close aria-label="닫기">✕</button></h2>
+    ${inApp() ? `<div class="soon" style="margin-bottom:12px">지금은 ${isKakao() ? "카톡" : "앱"} 안의 브라우저라 설치가 안 돼요. <b>${browserTo} 열어서</b> 설치해 주세요.</div>
+      <button class="btn" id="outside">${browserTo} 열기</button>
+      <div class="soon" style="font-size:13px;margin:14px 0 6px">${browser}에서 열린 다음엔:</div>` :
+      `<button class="btn" id="promptNow" ${INSTALL.prompt ? "" : "hidden"}>지금 설치하기</button>
+      ${INSTALL.prompt ? "" : `<div class="soon" style="font-size:13px;margin-bottom:6px">${ios ? "" : "크롬이 아직 설치 창을 열어 주지 않았어요. 메뉴에서 바로 설치할 수 있어요:"}</div>`}`}
+    <ol class="steps">${steps}</ol>
+    <button class="btn ghost mt" data-close>알겠어요</button>`, (sh) => {
+    $("#outside", sh)?.addEventListener("click", openOutside);
+    $("#promptNow", sh)?.addEventListener("click", promptInstall);
+  });
 }
 
 function busy(on) {

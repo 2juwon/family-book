@@ -10,7 +10,7 @@
 1. 한 사람이 **새로 만들기** — 서랍 이름, 가족 암호, 내 호칭(아빠·엄마…)
 2. 설정 → **가족 초대하기**에서 링크를 보내고, 가족 암호는 따로 알려 주기
 3. 가족은 링크를 열고 암호와 호칭을 넣으면 같은 서랍을 봄
-4. **앱으로 설치**: 시작 화면·설정의 '앱으로 설치하기' (안드로이드 크롬은 설치 창, 아이폰은 Safari 공유 → 홈 화면에 추가 안내)
+4. **앱으로 설치**: 시작 화면·설정의 '앱으로 설치하기' (늘 보임). 크롬이 설치 창을 열어 줬으면 바로 설치, 아직이면 ⋮ 메뉴 → 앱 설치 안내(PC는 주소창 설치 아이콘, 삼성 인터넷·아이폰 Safari도 안내). 카톡 안에서 열었으면 크롬(아이폰은 Safari)으로 열기 버튼
 
 ## 기능 (1차)
 - 지출·수입 기록: 금액(+1천·+1만… 빠른 버튼), 분류 아이콘, 날짜, 결제(카드·현금·이체), 메모, 적은 사람
@@ -33,7 +33,7 @@
 - `server/src/index.js` — Worker(입구) + `Family` Durable Object(가계부 하나 = 코드 하나, SQLite 표: meta·sessions·entries·fixed·fixed_applied)
 - 실시간: `GET /api/live?t=코드.열쇠` 웹소켓 → Durable Object가 받음(Hibernation API). 바꾸는 요청이 성공하면 연결된 기기에 `{type:"changed", by, what, method, cid}`를 보냄, 보낸 기기는 `X-Client`(cid)로 거름
 - 보안: 암호는 PBKDF2(10만 번)로만 저장, 8번 틀리면 10분 잠금, 기기마다 로그인 열쇠(token)
-- 시험: `server/test/api.test.mjs`(API 31개), `test/e2e.py`(브라우저 20개), `test/pwa.py`(설치 조건·끊긴 상태 열기·아이폰 안내), `test/back.py`(뒤로 버튼 14개), `test/sync.py`(실시간 동기화 10개)
+- 시험: `server/test/api.test.mjs`(API 31개), `test/e2e.py`(브라우저 20개), `test/pwa.py`(설치 조건·끊긴 상태 열기·아이폰 안내), `test/back.py`(뒤로 버튼 14개), `test/install.py`(설치 안내 7개), `test/sync.py`(실시간 동기화 10개)
 
 ## 배포
 - 화면: 저장소 Settings → Pages → `main` / root
