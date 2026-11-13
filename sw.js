@@ -1,5 +1,5 @@
 // 우리집 서랍 서비스 워커 — 화면 파일만 저장(가계부 기록은 서버에서). 이름을 바꾸면 예전 저장본이 지워짐
-const CACHE = "family-book-v2";
+const CACHE = "family-book-v3";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png", "./og.png"];
 
 self.addEventListener("install", (e) => {

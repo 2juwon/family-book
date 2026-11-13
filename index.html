@@ -9,10 +9,10 @@
 <meta property="og:description" content="가족이 함께 쓰는 우리집 서랍 — 가계부부터">
 <meta property="og:site_name" content="우리집 서랍">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://2juwon.github.io/family-book/">
-<meta property="og:image" content="https://2juwon.github.io/family-book/og.png">
+<meta property="og:image" content="https://2juwon.github.io/family-book/og.png?v=3">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="우리집 서랍 아이콘">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)">
@@ -215,6 +215,16 @@ const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
 // ───────── 상태 ─────────
 const S = { auth: load(LS_AUTH), month: null, data: null, tab: "list", filter: "all", statType: "out", busy: 0 };
 
+// 초대 코드는 ?join=코드(새 링크) 또는 #join=코드(예전 링크)
+function joinCode() {
+  const q = new URLSearchParams(location.search).get("join") || (location.hash.match(/join=([A-Za-z0-9]{6})/) || [])[1];
+  return q && /^[A-Za-z0-9]{6}$/.test(q) ? q : null;
+}
+function cleanUrl() {
+  const p = new URLSearchParams(location.search); p.delete("join");
+  const q = p.toString();
+  history.replaceState(null, "", location.pathname + (q ? "?" + q : ""));
+}
 function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
 function save(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 const $ = (s, el = document) => el.querySelector(s);
@@ -554,7 +564,7 @@ function viewBudget(d) {
 }
 
 function viewSet(d) {
-  const link = location.origin + location.pathname + "#join=" + d.family.code;
+  const link = location.origin + location.pathname + "?join=" + d.family.code;
   return `${installCard()}
     <div class="card">
       <h3>가족 초대하기</h3>
@@ -584,7 +594,7 @@ function viewSet(d) {
 
 // ───────── 시작 화면 ─────────
 function renderStart(app) {
-  const join = (location.hash.match(/join=([A-Za-z0-9]{6})/) || [])[1];
+  const join = joinCode();
   const mode = renderStart.mode || (join ? "join" : "new");
   app.innerHTML = `<div class="start">
     <img class="logo" src="icon-192.png" alt="" width="68" height="68" style="border-radius:18px;box-shadow:var(--shadow)">
@@ -613,7 +623,7 @@ function renderStart(app) {
       else r = await api("POST", "/api/join", { ...body, code: $("#f-code").value.trim() });
       S.auth = { token: r.token, code: r.code, member: r.member, name: r.name };
       save(LS_AUTH, S.auth);
-      history.replaceState(null, "", location.pathname + location.search);
+      cleanUrl();
       S.tab = "list"; S.month = kstToday().slice(0, 7);
       render(); refresh();
       toast(mode === "new" ? "우리집 서랍을 만들었어요! 설정에서 가족을 초대해 보세요" : "환영해요!");
@@ -921,13 +931,13 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
     S.month = kstToday().slice(0, 7);
     const c = load("fb.cache." + S.auth.code);
     if (c && c.month === S.month) S.data = c.data;
-    const join = (location.hash.match(/join=([A-Za-z0-9]{6})/) || [])[1];
+    const join = joinCode();
     if (join && join.toUpperCase() !== S.auth.code) {
       if (confirm(`다른 서랍(${join.toUpperCase()}) 초대 링크예요.\n지금 서랍에서 나가고 그쪽으로 들어갈까요?`)) {
         renderStart.mode = "join"; logout(false); return;
       }
     }
-    history.replaceState(null, "", location.pathname + location.search);
+    cleanUrl();
     render(); refresh();
   } else render();
   document.addEventListener("visibilitychange", () => { if (!document.hidden && S.auth) refresh(); });

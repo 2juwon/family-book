@@ -73,7 +73,7 @@ with sync_playwright() as p:
     mom = b.new_context(**phone).new_page()
     mom.on("pageerror", lambda e: errors.append(str(e)))
     mom.on("dialog", lambda d: d.accept())
-    mom.goto(PAGE + "#join=" + code)
+    mom.goto(PAGE + "?join=" + code)
     ok("초대 링크 → 들어가기 탭 + 코드 채움", mom.input_value("#f-code") == code)
     mom.fill("#f-pass", "틀린암호"); mom.fill("#f-me", "엄마"); mom.click("#go")
     mom.wait_for_selector("text=암호가 맞지 않아요")
@@ -81,6 +81,9 @@ with sync_playwright() as p:
     mom.fill("#f-pass", "우리집1234"); mom.click("#go")
     mom.wait_for_selector("text=이마트 장보기")
     ok("엄마가 아빠 기록을 봄", "동네 김밥집" in mom.inner_text("main"))
+    ok("들어온 뒤 주소에서 join 지움", "join" not in mom.url)
+    old = b.new_context(**phone).new_page(); old.goto(PAGE + "#join=" + code)
+    ok("예전 #join 링크도 코드 채움", old.input_value("#f-code") == code); old.close()
     mom.screenshot(path=f"{OUT}/03-list.png", full_page=True)
 
     # 엄마가 기록 고치기
@@ -125,6 +128,7 @@ with sync_playwright() as p:
 
     # 설정
     dad.click("[data-tab='set']"); dad.wait_for_selector(".code")
+    ok("초대 링크는 ?join=코드", dad.input_value("#linkbox").endswith("?join=" + code))
     ok("설정: 코드 + 가족 2명", code in dad.inner_text(".code") and "엄마" in dad.inner_text("main"))
     dad.click("[data-act='addcat']"); dad.fill("#ci", "🐶"); dad.fill("#cn", "반려동물"); dad.click(".sheet #save")
     dad.wait_for_selector("text=반려동물")
