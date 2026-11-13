@@ -19,6 +19,8 @@
 - 예산: 한 달 예산·분류별 예산, 남은 돈과 하루에 쓸 수 있는 돈, 80%·100% 넘으면 색과 문구로 알림
 - 고정 지출·수입: 매달 n일(말일 넘으면 마지막 날)에 내역에 자동으로 들어감. 지운 자동 기록은 되살아나지 않음. 켜기/끄기
 - 설정: 분류 추가·지우기, 가계부 이름, 엑셀용 CSV 내려받기, 가족 암호 바꾸기(다른 기기는 다시 로그인), 이 기기에서 나가기
+- 실시간 동기화: 가족 누가 적거나 고치면 다른 기기(내 태블릿·PC 포함)에 몇 초 안에 뜸 + 'OO님이 새 기록을 적었어요' 알림. 머리 오른쪽 초록 점 = 연결됨. 연결이 안 되면 1분마다 다시 불러옴, 화면을 내리면 끊었다가 다시 열 때 따라잡음
+- 뒤로 버튼: 입력 창 닫기 → 내역 탭으로 → '한 번 더 누르면 나가요' → 나가기
 - 어두운 화면, 휴대폰·PC
 
 ## 다음 단계
@@ -29,8 +31,9 @@
 - `index.html` — 화면 전체(라이브러리 없음, 글꼴만 Pretendard CDN). 서버 주소는 위쪽 `PROD_API`, `?api=` 로 바꿔 시험 가능
 - 앱 설치(PWA): `manifest.webmanifest`(scope /family-book/), `sw.js`(캐시 family-book-v1 — 같은 사이트 GET만 네트워크 먼저·안 되면 저장본, 서버 API는 안 건드림. 이름 바꾸면 예전 저장본 지움), 아이콘 `icon-192.png`·`icon-512.png`(마스커블)·`apple-touch-icon.png` — `python3 tools/icons.py`로 다시 만듦
 - `server/src/index.js` — Worker(입구) + `Family` Durable Object(가계부 하나 = 코드 하나, SQLite 표: meta·sessions·entries·fixed·fixed_applied)
+- 실시간: `GET /api/live?t=코드.열쇠` 웹소켓 → Durable Object가 받음(Hibernation API). 바꾸는 요청이 성공하면 연결된 기기에 `{type:"changed", by, what, method, cid}`를 보냄, 보낸 기기는 `X-Client`(cid)로 거름
 - 보안: 암호는 PBKDF2(10만 번)로만 저장, 8번 틀리면 10분 잠금, 기기마다 로그인 열쇠(token)
-- 시험: `server/test/api.test.mjs`(API 31개), `test/e2e.py`(브라우저 20개), `test/pwa.py`(설치 조건·끊긴 상태 열기·아이폰 안내)
+- 시험: `server/test/api.test.mjs`(API 31개), `test/e2e.py`(브라우저 20개), `test/pwa.py`(설치 조건·끊긴 상태 열기·아이폰 안내), `test/back.py`(뒤로 버튼 14개), `test/sync.py`(실시간 동기화 10개)
 
 ## 배포
 - 화면: 저장소 Settings → Pages → `main` / root

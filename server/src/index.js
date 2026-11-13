@@ -7,7 +7,7 @@ const MAX_AMOUNT = 100_000_000_000; // 1천억
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -106,13 +106,22 @@ export default {
         return json({ ...res, code });
       }
 
+      // 실시간 동기화: 웹소켓(?t=코드.열쇠) — 누가 바꾸면 "changed"를 보내 줌
+      if (path === "/api/live") {
+        if (request.headers.get("Upgrade") !== "websocket") return fail(426, "웹소켓으로 연결해 주세요");
+        const [code] = (url.searchParams.get("t") || "").split(".");
+        if (!/^[A-Z0-9]{6}$/.test(code || "")) return fail(401, "다시 로그인해 주세요");
+        return env.FAMILY.get(env.FAMILY.idFromName(code)).fetch(request);
+      }
+
       if (path.startsWith("/api/")) {
         const auth = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
         const [code, token] = auth.split(".");
         if (!code || !token || !/^[A-Z0-9]{6}$/.test(code)) return fail(401, "다시 로그인해 주세요");
         const stub = env.FAMILY.get(env.FAMILY.idFromName(code));
         const body = ["POST", "PUT"].includes(request.method) ? await request.json().catch(() => ({})) : null;
-        const res = await stub.handle(token, request.method, path, Object.fromEntries(url.searchParams), body);
+        const cid = (request.headers.get("X-Client") || "").slice(0, 40);
+        const res = await stub.handle(token, request.method, path, Object.fromEntries(url.searchParams), body, cid);
         if (res && res.error) return fail(res.status || 400, res.error);
         return json(res);
       }
@@ -207,7 +216,47 @@ export class Family extends DurableObject {
     return { token: `${this.get("code")}.${token}`, member, name: this.get("name") };
   }
 
-  async handle(token, method, path, query, body) {
+  // 웹소켓 받기 (잠자는 동안에도 연결 유지 — Hibernation API, 무료 플랜 가능)
+  async fetch(request) {
+    const url = new URL(request.url);
+    const token = (url.searchParams.get("t") || "").split(".")[1] || "";
+    const s = this.sql.exec("SELECT member FROM sessions WHERE token=?", token).toArray()[0];
+    if (!s) return new Response("unauthorized", { status: 401 });
+    if (this.ctx.getWebSockets().length > 50) return new Response("busy", { status: 429 });
+    const [client, server] = Object.values(new WebSocketPair());
+    this.ctx.acceptWebSocket(server, [token]);
+    server.serializeAttachment({ token, member: s.member });
+    return new Response(null, { status: 101, webSocket: client });
+  }
+  async webSocketMessage(ws, msg) {
+    if (msg === "ping") ws.send("pong");
+  }
+  async webSocketClose(ws, code) {
+    try { ws.close(code, "bye"); } catch {}
+  }
+  broadcast(data) {
+    const msg = JSON.stringify(data);
+    for (const ws of this.ctx.getWebSockets()) { try { ws.send(msg); } catch {} }
+  }
+
+  async handle(token, method, path, query, body, cid) {
+    const res = await this.route(token, method, path, query, body);
+    // 바뀐 게 있으면 연결된 가족 기기에 알림 (보낸 기기는 cid로 걸러 냄)
+    if (method !== "GET" && res && !res.error && !["/api/logout", "/api/password"].includes(path)) {
+      const s = this.sql.exec("SELECT member FROM sessions WHERE token=?", token).toArray()[0];
+      this.broadcast({ type: "changed", by: s?.member || "", cid: cid || "", what: path.split("/")[2] || "", method, at: this.now() });
+    }
+    if (path === "/api/password" && res && !res.error) {
+      // 다른 기기 연결은 끊음(다시 로그인)
+      for (const ws of this.ctx.getWebSockets()) if (ws.deserializeAttachment()?.token !== token) { try { ws.close(4001, "relogin"); } catch {} }
+    }
+    if (path === "/api/logout") {
+      for (const ws of this.ctx.getWebSockets(token)) { try { ws.close(4001, "logout"); } catch {} }
+    }
+    return res;
+  }
+
+  async route(token, method, path, query, body) {
     const s = this.sql.exec("SELECT member FROM sessions WHERE token=?", token).toArray()[0];
     if (!s) return { error: "다시 로그인해 주세요", status: 401 };
     this.migrate();

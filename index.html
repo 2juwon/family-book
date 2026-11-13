@@ -68,7 +68,9 @@ input:focus,select:focus{border-color:var(--brand)}
 header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(10px + env(safe-area-inset-top)) 16px 8px}
 .top{display:flex;align-items:center;justify-content:space-between}
 .fam{font-size:15px;font-weight:700;color:var(--ink2);max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.me{font-size:13px;color:var(--ink3)}
+.me{font-size:13px;color:var(--ink3);display:flex;align-items:center;gap:6px}
+.live{width:8px;height:8px;border-radius:50%;background:var(--line);transition:background .3s}
+.live.on{background:var(--good)}
 .monthbar{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px}
 .monthbar b{font-size:20px;min-width:128px;text-align:center}
 .monthbar button{width:40px;height:40px;border-radius:50%;font-size:20px;color:var(--ink2)}
@@ -213,7 +215,8 @@ const METHODS = ["카드", "현금", "이체"];
 const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
 
 // ───────── 상태 ─────────
-const S = { auth: load(LS_AUTH), month: null, data: null, tab: "list", filter: "all", statType: "out", busy: 0 };
+const S = { auth: load(LS_AUTH), month: null, data: null, tab: "list", filter: "all", statType: "out", busy: 0,
+  sheetOpen: false, ignorePop: 0, exitArm: 0, exiting: false };
 
 // 초대 코드는 ?join=코드(새 링크) 또는 #join=코드(예전 링크)
 function joinCode() {
@@ -310,7 +313,7 @@ async function api(method, path, body) {
   try {
     const res = await fetch(API + path, {
       method,
-      headers: { "Content-Type": "application/json", ...(S.auth ? { Authorization: "Bearer " + S.auth.token } : {}) },
+      headers: { "Content-Type": "application/json", "X-Client": CID, ...(S.auth ? { Authorization: "Bearer " + S.auth.token } : {}) },
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await res.json().catch(() => ({}));
@@ -335,10 +338,62 @@ async function refresh() {
   } catch (e) { toast(e.message); }
 }
 
+// ───────── 실시간 동기화 ─────────
+// 가족 누군가 적거나 고치면 서버가 웹소켓으로 알려 주고, 받은 기기는 바로 다시 불러옴.
+// 연결이 안 되면 1분마다 다시 불러오기로 대신함. 화면을 내려 두면 연결을 끊어 배터리 아낌.
+const CID = Math.random().toString(36).slice(2, 12);
+const LIVE = { ws: null, tries: 0, timer: null, ping: null, poll: null, debounce: null };
+function setLive(on) {
+  if (S.live === on) return;
+  S.live = on;
+  const dot = $("#livedot"); if (dot) { dot.classList.toggle("on", on); dot.title = on ? "실시간 동기화 중" : "연결 중…"; }
+}
+function liveConnect() {
+  clearTimeout(LIVE.timer);
+  if (!S.auth || document.hidden || LIVE.ws) return;
+  let ws;
+  try { ws = new WebSocket(API.replace(/^http/, "ws") + "/api/live?t=" + encodeURIComponent(S.auth.token)); }
+  catch { liveRetry(); return; }
+  LIVE.ws = ws;
+  ws.onopen = () => {
+    LIVE.tries = 0; setLive(true);
+    clearInterval(LIVE.ping); LIVE.ping = setInterval(() => { try { ws.send("ping"); } catch {} }, 25000);
+    refresh(); // 끊겨 있던 동안 바뀐 것 따라잡기
+  };
+  ws.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.type !== "changed" || m.cid === CID) return;
+    clearTimeout(LIVE.debounce);
+    LIVE.debounce = setTimeout(refresh, 250);
+    const what = m.what === "entries" ? (m.method === "POST" ? "새 기록을 적었어요" : m.method === "PUT" ? "기록을 고쳤어요" : "기록을 지웠어요")
+      : m.what === "fixed" ? "고정 항목을 바꿨어요" : "설정을 바꿨어요";
+    toast(`${m.by && m.by !== S.auth?.member ? m.by + "님이" : "다른 기기에서"} ${what}`);
+  };
+  ws.onclose = (ev) => {
+    if (LIVE.ws === ws) LIVE.ws = null;
+    clearInterval(LIVE.ping); setLive(false);
+    if (ev.code === 4001) { if (S.auth) refresh(); return; } // 다시 로그인 필요 → refresh가 처리
+    liveRetry();
+  };
+  ws.onerror = () => {};
+}
+function liveRetry() {
+  if (!S.auth || document.hidden) return;
+  const wait = Math.min(30000, 2000 * 2 ** LIVE.tries++);
+  LIVE.timer = setTimeout(liveConnect, wait);
+}
+function liveStop() {
+  clearTimeout(LIVE.timer); clearInterval(LIVE.ping);
+  if (LIVE.ws) { const w = LIVE.ws; LIVE.ws = null; try { w.close(1000, "bye"); } catch {} }
+  setLive(false);
+}
+setInterval(() => { if (S.auth && !document.hidden && !S.live) refresh(); }, 60000);
+
 function logout(silent) {
+  liveStop();
   if (!silent && S.auth) api("POST", "/api/logout").catch(() => {});
   if (S.auth) save("fb.cache." + S.auth.code, null);
-  S.auth = null; S.data = null; save(LS_AUTH, null);
+  S.auth = null; S.data = null; S.tab = "list"; save(LS_AUTH, null);
   closeSheet(); render();
   if (silent) toast("다시 로그인해 주세요");
 }
@@ -357,7 +412,7 @@ function render() {
   const d = S.data;
   app.innerHTML = `
     <header>
-      <div class="top"><span class="fam">🏠 ${esc(d?.family.name || S.auth.name || "우리집 서랍")}</span><span class="me">${esc(S.auth.member)}</span></div>
+      <div class="top"><span class="fam">🏠 ${esc(d?.family.name || S.auth.name || "우리집 서랍")}</span><span class="me"><span id="livedot" class="live ${S.live ? "on" : ""}" title="${S.live ? "실시간 동기화 중" : "연결 중…"}"></span>${esc(S.auth.member)}</span></div>
       ${S.tab === "set" ? "" : `<div class="monthbar">
         <button data-act="prev" aria-label="이전 달">‹</button><b>${monthLabel(S.month)}</b>
         <button data-act="next" aria-label="다음 달">›</button>
@@ -570,7 +625,7 @@ function viewSet(d) {
       <h3>가족 초대하기</h3>
       <div class="lbl" style="text-align:center;color:var(--ink2);font-size:13px">우리집 코드</div>
       <div class="code num">${esc(d.family.code)}</div>
-      <div class="soon" style="text-align:center;margin-bottom:12px">링크를 보내고, <b>가족 암호는 따로 알려 주세요</b></div>
+      <div class="soon" style="text-align:center;margin-bottom:12px">링크를 보내고, <b>가족 암호는 따로 알려 주세요</b><br><span style="font-size:13px">내 태블릿·PC도 같은 링크로 들어와 같은 호칭을 쓰면 돼요</span></div>
       <div class="two"><button class="btn ghost" data-act="copylink">링크 복사</button>${navigator.share ? `<button class="btn" data-act="share">보내기</button>` : ""}</div>
       <input class="sr" id="linkbox" value="${esc(link)}" readonly>
     </div>
@@ -589,7 +644,7 @@ function viewSet(d) {
     </div>
     <div class="card"><h3>곧 서랍에 들어올 것 <small>준비 중</small></h3>
       <div class="soon">📷 <b>가족 사진함</b> — 가족 사진을 모아 두고 함께 봐요 (구글 드라이브 같은 저장공간에 보관)<br>🚗 <b>주차 위치</b> — 차를 어디 댔는지 가족 모두 바로 확인해요</div></div>
-    <div class="soon" style="text-align:center;font-size:12px;padding:6px 0 20px">우리집 서랍 · 기록은 가족 암호를 아는 사람만 볼 수 있어요</div>`;
+    <div class="soon" style="text-align:center;font-size:12px;padding:6px 0 20px">우리집 서랍 · 기록은 서버에 있어서 어느 기기에서든 같아요 · 가족 암호를 아는 사람만 볼 수 있어요</div>`;
 }
 
 // ───────── 시작 화면 ─────────
@@ -623,9 +678,9 @@ function renderStart(app) {
       else r = await api("POST", "/api/join", { ...body, code: $("#f-code").value.trim() });
       S.auth = { token: r.token, code: r.code, member: r.member, name: r.name };
       save(LS_AUTH, S.auth);
-      cleanUrl();
+      cleanUrl(); setupHistory();
       S.tab = "list"; S.month = kstToday().slice(0, 7);
-      render(); refresh();
+      render(); refresh(); liveConnect();
       toast(mode === "new" ? "우리집 서랍을 만들었어요! 설정에서 가족을 초대해 보세요" : "환영해요!");
     } catch (e) { $("#err").textContent = e.message; btn.disabled = false; }
   };
@@ -633,6 +688,7 @@ function renderStart(app) {
 
 // ───────── 시트 ─────────
 function openSheet(html, mount) {
+  const had = S.sheetOpen;
   closeSheet(true);
   const dim = document.createElement("div"); dim.className = "dim";
   const sh = document.createElement("div"); sh.className = "sheet"; sh.setAttribute("role", "dialog");
@@ -642,17 +698,58 @@ function openSheet(html, mount) {
   requestAnimationFrame(() => { dim.classList.add("show"); sh.classList.add("show"); });
   $$("[data-close]", sh).forEach((b) => (b.onclick = () => closeSheet()));
   mount && mount(sh);
-  history.pushState({ sheet: 1 }, "");
+  S.sheetOpen = true;
+  // 시트를 다른 시트로 바꿀 땐 기록을 쌓지 않음
+  if (S.auth) had ? history.replaceState(hs("sheet"), "") : history.pushState(hs("sheet"), "");
   return sh;
 }
 function closeSheet(quiet) {
-  const sh = $(".sheet"), dim = $(".dim");
-  if (!sh) return;
-  sh.classList.remove("show"); dim.classList.remove("show");
-  setTimeout(() => { sh.remove(); dim.remove(); }, 250);
-  if (!quiet && history.state?.sheet) history.back();
+  const sh = $(".sheet:not(.closing)"), dim = $(".dim:not(.closing)");
+  const wasOpen = S.sheetOpen;
+  S.sheetOpen = false;
+  if (sh) {
+    sh.classList.add("closing"); dim?.classList.add("closing");
+    sh.classList.remove("show"); dim?.classList.remove("show");
+    setTimeout(() => { sh.remove(); dim?.remove(); }, 250);
+  }
+  // 버튼(✕·저장 등)으로 닫았으면 시트 몫의 기록 한 칸을 되돌림
+  if (!quiet && wasOpen && S.auth && history.state?.fb === "sheet" && history.state.sid === SID) { S.ignorePop++; history.back(); }
 }
-window.addEventListener("popstate", () => { if ($(".sheet")) closeSheet(true); });
+
+// ───────── 뒤로 버튼 ─────────
+// 기록 칸: app(바닥) → tab(내역 말고 다른 탭) → sheet(아래에서 올라온 창)
+// 뒤로: 시트 닫기 → 내역 탭으로 → "한 번 더 누르면 나가요" → 나가기
+const SID = Math.random().toString(36).slice(2);
+const hs = (fb) => ({ fb, sid: SID });
+function setupHistory() {
+  if (history.state?.sid === SID) return;
+  history.replaceState({ fb: "base", sid: SID }, "");
+  history.pushState(hs("app"), "");
+}
+function goTab(tab) {
+  if (tab === S.tab) { scrollTo(0, 0); return; }
+  if (S.tab === "list") history.pushState(hs("tab"), "");
+  else if (tab === "list" && history.state?.fb === "tab") { S.ignorePop++; history.back(); }
+  S.tab = tab; render(); scrollTo(0, 0);
+}
+window.addEventListener("popstate", (e) => {
+  if (!S.auth) { if (S.sheetOpen) closeSheet(true); return; }
+  if (S.exiting) { history.back(); return; }
+  if (S.ignorePop > 0) { S.ignorePop--; return; }
+  if (S.sheetOpen) { closeSheet(true); return; }
+  const st = e.state, own = st && st.sid === SID;
+  if (own && st.fb === "app") {
+    if (S.tab !== "list") { S.tab = "list"; render(); scrollTo(0, 0); }
+    return;
+  }
+  if (own && (st.fb === "tab" || st.fb === "sheet")) return;
+  // 바닥까지 왔음: 한 번 더 누르면 나감
+  if (Date.now() - S.exitArm < 2000) { S.exiting = true; history.back(); return; }
+  S.exitArm = Date.now();
+  history.pushState(hs("app"), "");
+  toast("뒤로 버튼을 한 번 더 누르면 나가요");
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && S.sheetOpen) closeSheet(); });
 
 function amountInput(sh, initial) {
   const inp = $("#amt", sh);
@@ -850,7 +947,7 @@ document.addEventListener("click", async (ev) => {
   if (!el || el.closest(".sheet")) return;
   const ds = el.dataset;
   if (ds.mode) { renderStart.mode = ds.mode; render(); return; }
-  if (ds.tab) { S.tab = ds.tab; render(); scrollTo(0, 0); return; }
+  if (ds.tab) { goTab(ds.tab); return; }
   if (ds.filter) { S.filter = ds.filter; render(); return; }
   if (ds.stat) { S.statType = ds.stat; render(); return; }
   if (ds.edit) { const e = S.data.entries.find((x) => x.id === +ds.edit); if (e) entrySheet(e); return; }
@@ -937,10 +1034,14 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
         renderStart.mode = "join"; logout(false); return;
       }
     }
-    cleanUrl();
-    render(); refresh();
+    cleanUrl(); setupHistory();
+    render(); refresh(); liveConnect();
   } else render();
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && S.auth) refresh(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { liveStop(); return; }
+    if (S.auth) { refresh(); liveConnect(); }
+  });
+  window.addEventListener("online", () => { if (S.auth) { refresh(); liveConnect(); } });
 })();
 </script>
 </body>
