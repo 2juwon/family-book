@@ -7,6 +7,13 @@
 <meta name="description" content="가족이 함께 쓰는 우리집 서랍 — 가계부(지출·수입 기록, 월별 통계, 예산과 고정지출)부터">
 <meta property="og:title" content="우리집 서랍">
 <meta property="og:description" content="가족이 함께 쓰는 우리집 서랍 — 가계부부터">
+<meta property="og:site_name" content="우리집 서랍">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://2juwon.github.io/family-book/">
+<meta property="og:image" content="https://2juwon.github.io/family-book/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f6f4ef" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
@@ -312,6 +319,7 @@ async function refresh() {
     const d = await api("GET", "/api/state?month=" + month);
     if (month !== S.month) return;
     S.data = d;
+    if (d.family?.name && S.auth.name !== d.family.name) { S.auth.name = d.family.name; save(LS_AUTH, S.auth); }
     save("fb.cache." + S.auth.code, { month, data: d });
     render();
   } catch (e) { toast(e.message); }
@@ -865,7 +873,7 @@ document.addEventListener("click", async (ev) => {
       toast("초대 링크를 복사했어요"); break;
     }
     case "share":
-      navigator.share({ title: "우리집 서랍", text: `${S.data.family.name}에 초대해요! 우리집 코드: ${S.data.family.code}`, url: $("#linkbox").value }).catch(() => {});
+      navigator.share({ title: "우리집 서랍", text: `[우리집 서랍] '${S.data.family.name}'에 초대해요! 우리집 코드: ${S.data.family.code} (가족 암호는 따로 알려 줄게요)`, url: $("#linkbox").value }).catch(() => {});
       break;
     case "rename":
       simpleSheet("서랍 이름", `<div class="field"><input id="nm" maxlength="20" value="${esc(S.data.family.name)}"></div>`, async (sh) => {

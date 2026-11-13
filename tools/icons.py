@@ -36,3 +36,20 @@ base.resize((512, 512), Image.LANCZOS).save(os.path.join(here, "icon-512.png"))
 base.resize((192, 192), Image.LANCZOS).save(os.path.join(here, "icon-192.png"))
 base.resize((180, 180), Image.LANCZOS).save(os.path.join(here, "apple-touch-icon.png"))
 print("ok")
+
+# 링크 미리보기 그림 og.png (1200x630)
+from PIL import ImageFont
+og = Image.new("RGB", (1200, 630), (246, 244, 239))
+icon = base.resize((300, 300), Image.LANCZOS)
+mask = Image.new("L", (300, 300), 0); ImageDraw.Draw(mask).rounded_rectangle([0, 0, 299, 299], 70, fill=255)
+og.paste(icon, (110, 165), mask)
+dd = ImageDraw.Draw(og)
+def font(w, size):
+    for p in [f"/usr/share/fonts/opentype/noto/NotoSansCJK-{w}.ttc"]:
+        if os.path.exists(p): return ImageFont.truetype(p, size, index=1)  # index 1 = KR
+    return ImageFont.load_default()
+dd.text((470, 200), "우리집 서랍", font=font("Black", 104), fill=(29, 28, 26))
+dd.text((474, 345), "가족이 함께 쓰는 우리집 서랍", font=font("Bold", 44), fill=(93, 90, 84))
+dd.text((474, 410), "가계부부터 · 사진함 · 주차 위치는 곧", font=font("Bold", 36), fill=GREEN)
+og.save(os.path.join(here, "og.png"))
+print("og ok")

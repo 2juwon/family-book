@@ -6,7 +6,7 @@ workers_dev = true
 [observability]
 enabled = true
 
-# 가계부 하나 = Durable Object 하나 (가계부 코드로 찾아감)
+# 서랍(가족) 하나 = Durable Object 하나 (우리집 코드로 찾아감)
 [[durable_objects.bindings]]
 name = "FAMILY"
 class_name = "Family"

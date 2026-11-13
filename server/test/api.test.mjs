@@ -101,4 +101,9 @@ r = await call("POST", "/api/logout", null, dad);
 r = await call("GET", "/api/state", null, dad);
 ok("로그아웃", r.status === 401);
 
+// 예전 기본 이름은 '우리집 서랍'으로 바뀜
+r = await call("POST", "/api/family", { name: "우리집 가계부", pass: "1234", member: "나" });
+r = await call("GET", "/api/state", null, r.data.token);
+ok("예전 기본 이름 → 우리집 서랍", r.data.family.name === "우리집 서랍");
+
 console.log(`\n${passed}개 통과`);

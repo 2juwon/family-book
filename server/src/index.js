@@ -124,7 +124,7 @@ export default {
   },
 };
 
-// ───────────────────────── 가계부 하나 ─────────────────────────
+// ───────────────────────── 서랍(가족) 하나 ─────────────────────────
 export class Family extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -149,6 +149,10 @@ export class Family extends DurableObject {
   }
   set(k, v) {
     this.sql.exec("INSERT INTO meta (k,v) VALUES (?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", k, JSON.stringify(v));
+  }
+  // 이름을 '우리집 서랍'으로 바꾸기 전에 기본 이름으로 만든 서랍은 새 기본 이름으로
+  migrate() {
+    if (this.get("name") === "우리집 가계부") this.set("name", "우리집 서랍");
   }
   now() { return Date.now(); }
   today() { return kstToday(this.now()); }
@@ -182,6 +186,7 @@ export class Family extends DurableObject {
 
   async join(body) {
     if (!this.get("name")) return { error: "그런 서랍이 없어요. 코드를 확인해 주세요", status: 404 };
+    this.migrate();
     const lock = this.get("lock", { fails: 0, until: 0 });
     if (lock.until > this.now()) {
       const min = Math.ceil((lock.until - this.now()) / 60000);
@@ -205,6 +210,7 @@ export class Family extends DurableObject {
   async handle(token, method, path, query, body) {
     const s = this.sql.exec("SELECT member FROM sessions WHERE token=?", token).toArray()[0];
     if (!s) return { error: "다시 로그인해 주세요", status: 401 };
+    this.migrate();
     this.sql.exec("UPDATE sessions SET seen=? WHERE token=?", this.now(), token);
     const me = s.member;
     const m = path.match(/^\/api\/(entries|fixed)\/(\d+)$/);
