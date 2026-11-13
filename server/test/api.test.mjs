@@ -101,6 +101,29 @@ r = await call("POST", "/api/logout", null, dad);
 r = await call("GET", "/api/state", null, dad);
 ok("로그아웃", r.status === 401);
 
+// 주차
+r = await call("POST", "/api/family", { name: "주차집", pass: "1234", member: "엄마" });
+const pk = r.data.token;
+r = await call("GET", "/api/state", null, pk);
+ok("주차: 기본 차 한 대", r.data.cars.length === 1 && r.data.cars[0].spot === null);
+const car1 = r.data.cars[0].id;
+r = await call("PUT", `/api/cars/${car1}/spot`, { place: "아파트", floor: "B2", zone: "C3", pillar: "C-12", memo: "엘베 앞" }, pk);
+ok("주차 위치 남기기", r.data.cars[0].spot.zone === "C3" && r.data.cars[0].spot.by === "엄마" && r.data.places[0] === "아파트");
+r = await call("PUT", `/api/cars/${car1}/spot`, { floor: "B9X", zone: "C3" }, pk);
+ok("이상한 층 거절", r.status === 400);
+r = await call("PUT", `/api/cars/${car1}/spot`, { floor: "B1", zone: "G9" }, pk);
+ok("이상한 구역 거절", r.status === 400);
+r = await call("POST", "/api/cars", { name: "아빠 차" }, pk);
+ok("차 추가", r.data.cars.length === 2);
+const car2 = r.data.cars[1].id;
+r = await call("PUT", `/api/cars/${car2}/spot`, { place: "회사", floor: "1F", zone: "A1" }, pk);
+ok("최근 장소 순서", r.data.places.join() === "회사,아파트");
+r = await call("DELETE", `/api/cars/${car1}/spot`, null, pk);
+ok("출차(위치 지우기)", r.data.cars[0].spot === null);
+r = await call("DELETE", `/api/cars/${car2}`, null, pk);
+r = await call("DELETE", `/api/cars/${car1}`, null, pk);
+ok("마지막 차는 못 지움", r.status === 400);
+
 // 예전 기본 이름은 '우리집 서랍'으로 바뀜
 r = await call("POST", "/api/family", { name: "우리집 가계부", pass: "1234", member: "나" });
 r = await call("GET", "/api/state", null, r.data.token);

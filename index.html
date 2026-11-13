@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>우리집 서랍</title>
-<meta name="description" content="가족이 함께 쓰는 우리집 서랍 — 가계부(지출·수입 기록, 월별 통계, 예산과 고정지출)부터">
+<meta name="description" content="가족이 함께 쓰는 우리집 서랍 — 가계부(지출·수입, 통계, 예산·고정지출)와 주차 위치 공유">
 <meta property="og:title" content="우리집 서랍">
-<meta property="og:description" content="가족이 함께 쓰는 우리집 서랍 — 가계부부터">
+<meta property="og:description" content="가족이 함께 쓰는 우리집 서랍 — 가계부·주차 위치">
 <meta property="og:site_name" content="우리집 서랍">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://2juwon.github.io/family-book/og.png?v=3">
+<meta property="og:image" content="https://2juwon.github.io/family-book/og.png?v=4">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="우리집 서랍 아이콘">
@@ -197,6 +197,24 @@ nav button.on .ni{filter:none;opacity:1}
 .steps{margin:4px 0 0;padding-left:22px;line-height:1.9;color:var(--ink2)}
 .steps b{color:var(--ink)}
 [hidden]{display:none!important}
+/* 주차 */
+.where{display:flex;align-items:center;gap:14px}
+.fbadge{flex:none;min-width:68px;height:68px;border-radius:18px;color:#fff;display:grid;place-items:center;font-size:26px;font-weight:800;letter-spacing:-.02em;padding:0 8px}
+.where .z{font-size:26px;font-weight:800}
+.where .sub{font-size:14px;color:var(--ink2);margin-top:2px}
+.pmap{margin:14px 0 6px}
+.pmap svg{display:block;width:100%;height:auto;touch-action:manipulation}
+.pmap text{font-size:11px;fill:var(--ink3);font-weight:600}
+.pmap .cell{cursor:pointer}
+.pmeta{font-size:13px;color:var(--ink3);margin-top:8px;line-height:1.6}
+.pmeta b{color:var(--ink2)}
+@keyframes drop{0%{transform:translateY(-26px);opacity:0}60%{transform:translateY(3px);opacity:1}100%{transform:none}}
+.pin{animation:drop .45s cubic-bezier(.2,.8,.2,1) both;transform-box:fill-box;transform-origin:center bottom}
+.floors{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}
+.floors::-webkit-scrollbar{display:none}
+.floors button{flex:none;min-width:48px;padding:9px 10px;border-radius:12px;background:var(--bg);font-weight:800;color:var(--ink2);border:2px solid transparent}
+.floors button.on{color:#fff}
+.lbl2{font-size:13px;color:var(--ink2);font-weight:600;margin:14px 0 8px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 </style>
 </head>
@@ -401,7 +419,8 @@ function liveConnect() {
     clearTimeout(LIVE.debounce);
     LIVE.debounce = setTimeout(refresh, 250);
     const what = m.what === "entries" ? (m.method === "POST" ? "새 기록을 적었어요" : m.method === "PUT" ? "기록을 고쳤어요" : "기록을 지웠어요")
-      : m.what === "fixed" ? "고정 항목을 바꿨어요" : "설정을 바꿨어요";
+      : m.what === "fixed" ? "고정 항목을 바꿨어요"
+      : m.what === "cars" ? (m.spot ? (m.method === "PUT" ? "주차 위치를 남겼어요 🚗" : "출차했어요") : "차 목록을 바꿨어요") : "설정을 바꿨어요";
     toast(`${m.by && m.by !== S.auth?.member ? m.by + "님이" : "다른 기기에서"} ${what}`);
   };
   ws.onclose = (ev) => {
@@ -448,17 +467,17 @@ function render() {
   app.innerHTML = `
     <header>
       <div class="top"><span class="fam">🏠 ${esc(d?.family.name || S.auth.name || "우리집 서랍")}</span><span class="me"><span id="livedot" class="live ${S.live ? "on" : ""}" title="${S.live ? "실시간 동기화 중" : "연결 중…"}"></span>${esc(S.auth.member)}</span></div>
-      ${S.tab === "set" ? "" : `<div class="monthbar">
+      ${S.tab === "set" || S.tab === "park" ? "" : `<div class="monthbar">
         <button data-act="prev" aria-label="이전 달">‹</button><b>${monthLabel(S.month)}</b>
         <button data-act="next" aria-label="다음 달">›</button>
         ${S.month !== kstToday().slice(0, 7) ? `<button class="today-btn" data-act="thism">이번 달</button>` : ""}
       </div>`}
     </header>
     <main>${!d ? `<div class="empty"><div class="e">⏳</div>불러오는 중…</div>` :
-      S.tab === "list" ? viewList(d) : S.tab === "stat" ? viewStat(d) : S.tab === "budget" ? viewBudget(d) : viewSet(d)}</main>
-    ${S.tab === "set" ? "" : `<button class="fab" data-act="add" aria-label="기록 추가">+</button>`}
+      S.tab === "list" ? viewList(d) : S.tab === "stat" ? viewStat(d) : S.tab === "budget" ? viewBudget(d) : S.tab === "park" ? viewPark(d) : viewSet(d)}</main>
+    ${S.tab === "set" || S.tab === "park" ? "" : `<button class="fab" data-act="add" aria-label="기록 추가">+</button>`}
     <nav><div class="in">
-      ${[["list", "📒", "내역"], ["stat", "📊", "통계"], ["budget", "🎯", "예산"], ["set", "⚙️", "설정"]].map(([k, i, n]) =>
+      ${[["list", "📒", "내역"], ["stat", "📊", "통계"], ["budget", "🎯", "예산"], ["park", "🚗", "주차"], ["set", "⚙️", "설정"]].map(([k, i, n]) =>
         `<button data-tab="${k}" class="${S.tab === k ? "on" : ""}"><span class="ni">${i}</span>${n}</button>`).join("")}
     </div></nav>`;
   if (d && S.tab === "stat") mountTrend(d);
@@ -653,6 +672,141 @@ function viewBudget(d) {
     </div></div>` : ""}`;
 }
 
+// ───────── 주차 ─────────
+const FLOORS = ["B6", "B5", "B4", "B3", "B2", "B1", "1F", "2F", "3F", "4F", "5F"];
+const FCOL = { B1: "#2a78d6", B2: "#1e8a4c", B3: "#eb6834", B4: "#8a56d6", B5: "#d43c8a", B6: "#8a6d3b",
+  "1F": "#5b6470", "2F": "#0f9aa8", "3F": "#c98500", "4F": "#b5452c", "5F": "#3d5a99" };
+const COLS = ["A", "B", "C", "D", "E", "F"];
+function ago(t) {
+  const m = Math.floor((Date.now() - t) / 60000);
+  if (m < 1) return "방금";
+  if (m < 60) return `${m}분 전`;
+  if (m < 60 * 24 && new Date(t).getDate() === new Date().getDate()) return `${Math.floor(m / 60)}시간 전`;
+  const d = new Date(t), hm = `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  if (m < 60 * 48) return `어제 ${hm}`;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일 ${hm}`;
+}
+// 층 안내도(임의로 그린 공통 그림): 위 줄 1 · 통로 · 가운데 2·3(등 맞댄 줄) · 통로 · 아래 줄 4, 열 A~F
+function parkMap(floor, zone, editable) {
+  const col = FCOL[floor] || "#5b6470";
+  const X0 = 30, CW = 50, rows = { 1: [28, 72], 2: [104, 144], 3: [144, 184], 4: [216, 260] };
+  let g = `<svg viewBox="0 0 336 270" role="img" aria-label="${floor} 주차장 안내도${zone ? ", " + zone + " 구역에 주차" : ""}">`;
+  g += `<rect x="24" y="22" width="310" height="244" rx="14" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/>`;
+  // 통로
+  for (const [y1, y2] of [[72, 104], [184, 216]]) {
+    g += `<line x1="${X0}" x2="${X0 + CW * 6}" y1="${(y1 + y2) / 2}" y2="${(y1 + y2) / 2}" stroke="var(--line)" stroke-width="2" stroke-dasharray="8 7"/>`;
+    for (const x of [80, 180, 270]) g += `<path d="M${x - 6},${(y1 + y2) / 2 - 5} l8,5 l-8,5" fill="none" stroke="var(--ink3)" stroke-width="1.6" opacity=".6"/>`;
+  }
+  g += `<text x="334" y="92" text-anchor="end" style="font-size:10px">입구 ▸</text>`;
+  COLS.forEach((c, i) => g += `<text x="${X0 + CW * i + CW / 2}" y="16" text-anchor="middle" style="font-size:12px;fill:var(--ink2)">${c}</text>`);
+  for (const r of [1, 2, 3, 4]) {
+    const [y1, y2] = rows[r];
+    g += `<text x="12" y="${(y1 + y2) / 2 + 4}" text-anchor="middle" style="font-size:12px;fill:var(--ink2)">${r}</text>`;
+    COLS.forEach((c, i) => {
+      const x = X0 + CW * i, z = c + r, on = z === zone;
+      g += `<g class="${editable ? "cell" : ""}" data-zone="${z}">
+        <rect x="${x + 2}" y="${y1 + 2}" width="${CW - 4}" height="${y2 - y1 - 4}" rx="6" fill="${on ? col : col}" fill-opacity="${on ? 1 : 0.1}" stroke="${on ? col : "none"}"/>`;
+      for (let k = 1; k < 3; k++) g += `<line x1="${x + (CW / 3) * k}" x2="${x + (CW / 3) * k}" y1="${y1 + 8}" y2="${y2 - 8}" stroke="${on ? "#fff" : col}" stroke-opacity="${on ? 0.5 : 0.35}" stroke-width="1.5"/>`;
+      g += `<text x="${x + CW / 2}" y="${(y1 + y2) / 2 + 4}" text-anchor="middle" style="font-size:11px;fill:${on ? "#fff" : "var(--ink3)"};opacity:${on ? 0 : 0.75}">${z}</text></g>`;
+    });
+  }
+  if (zone && /^[A-F][1-4]$/.test(zone)) {
+    const i = COLS.indexOf(zone[0]), [y1, y2] = rows[zone[1]];
+    const cx = X0 + CW * i + CW / 2, cy = (y1 + y2) / 2;
+    g += `<g class="pin"><path d="M${cx},${cy + 14} C${cx - 4},${cy + 4} ${cx - 17},${cy - 2} ${cx - 17},${cy - 15} a17,17 0 1 1 34,0 C${cx + 17},${cy - 2} ${cx + 4},${cy + 4} ${cx},${cy + 14}Z" fill="#fff" stroke="${col}" stroke-width="3"/>
+      <text x="${cx}" y="${cy - 9}" text-anchor="middle" style="font-size:16px">🚗</text></g>`;
+  }
+  return g + `</svg>`;
+}
+function viewPark(d) {
+  const cars = d.cars || [];
+  if (!cars.some((c) => c.id === S.car)) S.car = cars[0]?.id;
+  const car = cars.find((c) => c.id === S.car);
+  const sp = car?.spot;
+  return `
+    <div class="chips">${cars.map((c) => `<button class="chip ${c.id === S.car ? "on" : ""}" data-car="${esc(c.id)}">🚗 ${esc(c.name)}${c.spot ? ` · ${esc(c.spot.floor)}` : ""}</button>`).join("")}
+      <button class="chip" data-act="carmenu">${cars.length > 1 ? "차 관리" : "+ 차 추가"}</button></div>
+    <div class="card">
+      ${sp ? `
+        <div class="where"><div class="fbadge" style="background:${FCOL[sp.floor] || "#5b6470"}">${esc(sp.floor)}</div>
+          <div><div class="z">${esc(sp.zone[0])}구역 ${esc(sp.zone[1])}줄${sp.pillar ? ` <span style="font-size:17px;color:var(--ink2)">· 기둥 ${esc(sp.pillar)}</span>` : ""}</div>
+          <div class="sub">📍 ${esc(sp.place)}${sp.memo ? ` · ${esc(sp.memo)}` : ""}</div></div></div>
+        <div class="pmap">${parkMap(sp.floor, sp.zone, false)}</div>
+        <div class="pmeta"><b>${esc(sp.by)}</b> · ${ago(sp.at)} 남김 · 안내도는 대략적인 위치예요${sp.pillar ? ", 기둥 번호를 확인하세요" : ""}</div>
+        <div class="row2"><button class="btn danger" data-act="parkout" style="flex:.55">출차했어요</button><button class="btn" data-act="parkset">다시 남기기</button></div>` : `
+        <div class="empty" style="padding:26px 8px 18px"><div class="e">🅿️</div><b style="color:var(--ink)">${esc(car?.name || "우리 차")}</b> 주차 위치가 없어요<br>차를 대고 나서 층과 자리를 눌러 남겨 두세요</div>
+        <button class="btn" data-act="parkset">🚗 주차 위치 남기기</button>`}
+    </div>
+    <div class="soon" style="font-size:13px;padding:0 4px 10px">가족 모두에게 바로 보여요. 기둥에 적힌 번호(예: C-12)를 같이 적어 두면 찾기 쉬워요.</div>`;
+}
+function parkSheet() {
+  const car = S.data.cars.find((c) => c.id === S.car); if (!car) return;
+  const last = car.spot || S.data.cars.find((c) => c.spot)?.spot || {};
+  const st = { floor: last.floor || "B1", zone: null, place: last.place || S.data.places?.[0] || "집" };
+  const places = [...new Set([st.place, ...(S.data.places || []), "집", "회사", "마트"])].slice(0, 6);
+  openSheet(`
+    <h2>${esc(car.name)} 어디 댔어요?<button data-close aria-label="닫기">✕</button></h2>
+    <div class="lbl2" style="margin-top:0">장소</div>
+    <div class="chips" id="pplace" style="padding-bottom:4px"></div>
+    <input id="pnew" maxlength="16" placeholder="다른 장소 (예: 처가, 병원)" style="margin-top:6px">
+    <div class="lbl2">층</div>
+    <div class="floors" id="pfloor"></div>
+    <div class="lbl2">자리 <span style="font-weight:400;color:var(--ink3)">— 비슷한 곳을 눌러 주세요</span></div>
+    <div class="pmap" id="pmap" style="margin-top:0"></div>
+    <div class="two"><div><div class="lbl2" style="margin-top:6px">기둥 번호 <span style="font-weight:400;color:var(--ink3)">(선택)</span></div><input id="ppillar" maxlength="10" placeholder="예) C-12"></div>
+      <div><div class="lbl2" style="margin-top:6px">메모 <span style="font-weight:400;color:var(--ink3)">(선택)</span></div><input id="pmemo" maxlength="60" placeholder="예) 엘베 앞"></div></div>
+    <div class="err" id="err"></div>
+    <button class="btn" id="save">여기 댔어요</button>
+  `, (sh) => {
+    const paint = () => {
+      $("#pplace", sh).innerHTML = places.map((p) => `<button type="button" class="chip ${p === st.place ? "on" : ""}" data-pl="${esc(p)}">${esc(p)}</button>`).join("");
+      $("#pfloor", sh).innerHTML = FLOORS.map((f) => `<button type="button" data-fl="${f}" class="${f === st.floor ? "on" : ""}" style="${f === st.floor ? `background:${FCOL[f]};border-color:${FCOL[f]}` : `color:${FCOL[f]}`}">${f}</button>`).join("");
+      $("#pmap", sh).innerHTML = parkMap(st.floor, st.zone, true);
+    };
+    paint();
+    const fb = $(`[data-fl="${st.floor}"]`, sh); fb?.scrollIntoView({ inline: "center", block: "nearest" });
+    sh.addEventListener("click", (ev) => {
+      const pl = ev.target.closest("[data-pl]"); if (pl) { st.place = pl.dataset.pl; $("#pnew", sh).value = ""; paint(); }
+      const fl = ev.target.closest("[data-fl]"); if (fl) { st.floor = fl.dataset.fl; paint(); }
+      const z = ev.target.closest("[data-zone]"); if (z) { st.zone = z.dataset.zone; $("#err", sh).textContent = ""; paint(); }
+    });
+    $("#pnew", sh).addEventListener("input", (e) => { if (e.target.value.trim()) { st.place = e.target.value.trim(); $$("[data-pl]", sh).forEach((b) => b.classList.remove("on")); } });
+    $("#save", sh).onclick = async () => {
+      if (!st.zone) { $("#err", sh).textContent = "안내도에서 차를 댄 곳과 비슷한 자리를 눌러 주세요"; return; }
+      try {
+        const r = await api("PUT", `/api/cars/${car.id}/spot`, { place: st.place, floor: st.floor, zone: st.zone, pillar: $("#ppillar", sh).value.trim(), memo: $("#pmemo", sh).value.trim() });
+        S.data.cars = r.cars; S.data.places = r.places; closeSheet(); render(); toast("주차 위치를 남겼어요. 가족에게도 보여요");
+      } catch (err) { $("#err", sh).textContent = err.message; }
+    };
+  });
+}
+function carSheet() {
+  const cars = S.data.cars;
+  openSheet(`<h2>차 관리<button data-close aria-label="닫기">✕</button></h2>
+    ${cars.map((c) => `<div class="bcat"><input data-cname="${esc(c.id)}" maxlength="12" value="${esc(c.name)}" style="flex:1;width:auto;text-align:left">
+      ${cars.length > 1 ? `<button class="chip" data-cdel="${esc(c.id)}" style="color:var(--bad)">지우기</button>` : ""}</div>`).join("")}
+    ${cars.length < 5 ? `<div class="bcat"><input id="cnew" maxlength="12" placeholder="새 차 이름 (예: 아빠 차)" style="flex:1;width:auto;text-align:left"><button class="chip on" id="cadd">추가</button></div>` : ""}
+    <div class="err" id="err"></div>
+    <button class="btn mt" id="save">이름 저장</button>`, (sh) => {
+    const run = async (fn) => { try { const r = await fn(); S.data.cars = r.cars; render(); return true; } catch (e) { $("#err", sh).textContent = e.message; return false; } };
+    $("#cadd", sh)?.addEventListener("click", async () => {
+      const name = $("#cnew", sh).value.trim(); if (!name) { $("#err", sh).textContent = "차 이름을 적어 주세요"; return; }
+      if (await run(() => api("POST", "/api/cars", { name }))) { S.car = S.data.cars[S.data.cars.length - 1].id; closeSheet(); render(); toast("차를 추가했어요"); }
+    });
+    $$("[data-cdel]", sh).forEach((b) => b.addEventListener("click", async () => {
+      if (!confirm("이 차를 지울까요?")) return;
+      if (await run(() => api("DELETE", "/api/cars/" + b.dataset.cdel))) { closeSheet(); toast("지웠어요"); }
+    }));
+    $("#save", sh).onclick = async () => {
+      for (const inp of $$("[data-cname]", sh)) {
+        const c = cars.find((x) => x.id === inp.dataset.cname);
+        if (c && inp.value.trim() && inp.value.trim() !== c.name) if (!(await run(() => api("PUT", "/api/cars/" + c.id, { name: inp.value.trim() })))) return;
+      }
+      closeSheet(); toast("저장했어요");
+    };
+  });
+}
+
 function viewSet(d) {
   const link = location.origin + location.pathname + "?join=" + d.family.code;
   return `${installCard()}
@@ -678,7 +832,7 @@ function viewSet(d) {
       <button class="setrow" data-act="logout" style="color:var(--bad)">이 기기에서 나가기 <span>›</span></button>
     </div>
     <div class="card"><h3>곧 서랍에 들어올 것 <small>준비 중</small></h3>
-      <div class="soon">📷 <b>가족 사진함</b> — 가족 사진을 모아 두고 함께 봐요 (구글 드라이브 같은 저장공간에 보관)<br>🚗 <b>주차 위치</b> — 차를 어디 댔는지 가족 모두 바로 확인해요</div></div>
+      <div class="soon">📷 <b>가족 사진함</b> — 가족 사진을 모아 두고 함께 봐요 (구글 드라이브 같은 저장공간에 보관)</div></div>
     <div class="soon" style="text-align:center;font-size:12px;padding:6px 0 20px">우리집 서랍 · 기록은 서버에 있어서 어느 기기에서든 같아요 · 가족 암호를 아는 사람만 볼 수 있어요</div>`;
 }
 
@@ -689,7 +843,7 @@ function renderStart(app) {
   app.innerHTML = `<div class="start">
     <img class="logo" src="icon-192.png" alt="" width="68" height="68" style="border-radius:18px;box-shadow:var(--shadow)">
     <h1>우리집 서랍</h1>
-    <p class="lead">가족이 함께 쓰는 우리집 서랍이에요.<br>지금은 <b>가계부</b>부터 — 누가 적어도 모두의 휴대폰에 바로 보여요.</p>
+    <p class="lead">가족이 함께 쓰는 우리집 서랍이에요.<br><b>가계부</b>와 <b>주차 위치</b>를 함께 — 누가 남겨도 모두의 휴대폰에 바로 보여요.</p>
     <div class="seg"><button class="${mode === "new" ? "on" : ""}" data-mode="new">새로 만들기</button><button class="${mode === "join" ? "on" : ""}" data-mode="join">가족 서랍 들어가기</button></div>
     <form id="startform" autocomplete="off">
       ${mode === "new" ? `
@@ -978,10 +1132,11 @@ async function exportCSV() {
 
 // ───────── 누르기 ─────────
 document.addEventListener("click", async (ev) => {
-  const el = ev.target.closest("[data-act],[data-tab],[data-filter],[data-stat],[data-edit],[data-fixed],[data-toggle],[data-delcat],[data-mode]");
+  const el = ev.target.closest("[data-car],[data-act],[data-tab],[data-filter],[data-stat],[data-edit],[data-fixed],[data-toggle],[data-delcat],[data-mode]");
   if (!el || el.closest(".sheet")) return;
   const ds = el.dataset;
   if (ds.mode) { renderStart.mode = ds.mode; render(); return; }
+  if (ds.car) { S.car = ds.car; render(); return; }
   if (ds.tab) { goTab(ds.tab); return; }
   if (ds.filter) { S.filter = ds.filter; render(); return; }
   if (ds.stat) { S.statType = ds.stat; render(); return; }
@@ -1006,6 +1161,14 @@ document.addEventListener("click", async (ev) => {
       if (S.data) S.data = { ...S.data, entries: [], trend: [], prevCats: [], month: null };
       render(); refresh(); break;
     case "add": entrySheet(null); break;
+    case "parkset": parkSheet(); break;
+    case "carmenu": carSheet(); break;
+    case "parkout": {
+      const car = S.data.cars.find((c) => c.id === S.car);
+      if (!car || !confirm(`${car.name} 출차했나요?\n주차 위치를 지울게요.`)) break;
+      try { const r = await api("DELETE", `/api/cars/${car.id}/spot`); S.data.cars = r.cars; render(); toast("출차했어요"); } catch (e) { toast(e.message); }
+      break;
+    }
     case "install": doInstall(); break;
     case "addfixed": fixedSheet(null); break;
     case "budget": budgetSheet(); break;

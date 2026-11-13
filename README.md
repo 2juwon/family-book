@@ -1,7 +1,7 @@
 # 🗄️ 우리집 서랍
 
 가족이 함께 쓰는 우리집 서랍. 지금은 가계부부터 — 누가 적어도 모두의 휴대폰에 바로 보여요.
-앞으로 가족 사진함, 주차 위치 공유를 같은 서랍에 넣을 예정이에요. (저장소 이름은 처음 이름 그대로 family-book)
+지금은 가계부와 🚗 주차 위치, 앞으로 가족 사진함을 같은 서랍에 넣을 예정이에요. (저장소 이름은 처음 이름 그대로 family-book)
 
 - 화면: https://2juwon.github.io/family-book/
 - 서버: https://family-book.2juwon.workers.dev (Cloudflare Workers + Durable Objects, 무료 플랜)
@@ -23,9 +23,13 @@
 - 뒤로 버튼: 입력 창 닫기 → 내역 탭으로 → '한 번 더 누르면 나가요' → 나가기
 - 어두운 화면, 휴대폰·PC
 
+## 🚗 주차 위치
+- 아래 탭 '주차'. 차마다(최대 5대) 장소(최근 6곳 기억)·층(B6~5F, 층마다 색)·자리(임의로 그린 공통 층 안내도 A~F열 × 1~4줄 칸)·기둥 번호·메모를 남김
+- 가족 모두 바로 보임(실시간 알림 '○○님이 주차 위치를 남겼어요'), 누가·언제 남겼는지 표시, '출차했어요'로 지움
+- 안내도는 실제 주차장 모양이 아니라 대략적인 위치용 — 정확한 건 기둥 번호
+
 ## 다음 단계
 - 📷 가족 사진함 — 구글 드라이브 같은 저장공간에 연결해 사진 보관·공유
-- 🚗 주차 위치 — 차를 어디 댔는지 가족 모두 확인
 
 ## 구조
 - `index.html` — 화면 전체(라이브러리 없음, 글꼴만 Pretendard CDN). 서버 주소는 위쪽 `PROD_API`, `?api=` 로 바꿔 시험 가능
@@ -33,7 +37,7 @@
 - `server/src/index.js` — Worker(입구) + `Family` Durable Object(가계부 하나 = 코드 하나, SQLite 표: meta·sessions·entries·fixed·fixed_applied)
 - 실시간: `GET /api/live?t=코드.열쇠` 웹소켓 → Durable Object가 받음(Hibernation API). 바꾸는 요청이 성공하면 연결된 기기에 `{type:"changed", by, what, method, cid}`를 보냄, 보낸 기기는 `X-Client`(cid)로 거름
 - 보안: 암호는 PBKDF2(10만 번)로만 저장, 8번 틀리면 10분 잠금, 기기마다 로그인 열쇠(token)
-- 시험: `server/test/api.test.mjs`(API 31개), `test/e2e.py`(브라우저 20개), `test/pwa.py`(설치 조건·끊긴 상태 열기·아이폰 안내), `test/back.py`(뒤로 버튼 14개), `test/install.py`(설치 안내 7개), `test/sync.py`(실시간 동기화 10개)
+- 시험: `server/test/api.test.mjs`(API 40개), `test/e2e.py`(브라우저 20개), `test/pwa.py`(설치 조건·끊긴 상태 열기·아이폰 안내), `test/back.py`(뒤로 버튼 14개), `test/install.py`(설치 안내 7개), `test/park.py`(주차 12개), `test/sync.py`(실시간 동기화 10개)
 
 ## 배포
 - 화면: 저장소 Settings → Pages → `main` / root

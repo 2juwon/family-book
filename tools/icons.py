@@ -41,6 +41,6 @@ def font(w, size):
     return ImageFont.load_default()
 dd.text((470, 200), "우리집 서랍", font=font("Black", 104), fill=(29, 28, 26))
 dd.text((474, 345), "가족이 함께 쓰는 우리집 서랍", font=font("Bold", 44), fill=(93, 90, 84))
-dd.text((474, 410), "가계부부터 · 사진함 · 주차 위치는 곧", font=font("Bold", 36), fill=GREEN)
+dd.text((474, 410), "가계부 · 주차 위치 · 사진함은 곧", font=font("Bold", 36), fill=GREEN)
 og.save(os.path.join(here, "og.png"))
 print("og ok")

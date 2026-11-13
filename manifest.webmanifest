@@ -1,7 +1,7 @@
 {
   "name": "우리집 서랍",
   "short_name": "우리집 서랍",
-  "description": "가족이 함께 쓰는 우리집 서랍 — 가계부부터",
+  "description": "가족이 함께 쓰는 우리집 서랍 — 가계부·주차 위치",
   "id": "/family-book/",
   "start_url": "/family-book/",
   "scope": "/family-book/",

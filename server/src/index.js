@@ -244,7 +244,7 @@ export class Family extends DurableObject {
     // 바뀐 게 있으면 연결된 가족 기기에 알림 (보낸 기기는 cid로 걸러 냄)
     if (method !== "GET" && res && !res.error && !["/api/logout", "/api/password"].includes(path)) {
       const s = this.sql.exec("SELECT member FROM sessions WHERE token=?", token).toArray()[0];
-      this.broadcast({ type: "changed", by: s?.member || "", cid: cid || "", what: path.split("/")[2] || "", method, at: this.now() });
+      this.broadcast({ type: "changed", by: s?.member || "", cid: cid || "", what: path.split("/")[2] || "", spot: path.endsWith("/spot"), method, at: this.now() });
     }
     if (path === "/api/password" && res && !res.error) {
       // 다른 기기 연결은 끊음(다시 로그인)
@@ -263,6 +263,8 @@ export class Family extends DurableObject {
     this.sql.exec("UPDATE sessions SET seen=? WHERE token=?", this.now(), token);
     const me = s.member;
     const m = path.match(/^\/api\/(entries|fixed)\/(\d+)$/);
+    const pk = path.match(/^\/api\/cars(?:\/([a-z0-9]{1,20}))?(\/spot)?$/);
+    if (pk) return this.parking(pk[1], !!pk[2], method, body, me);
 
     if (path === "/api/state" && method === "GET") return this.state(query.month);
     if (path === "/api/entries" && method === "POST") return this.addEntry(body, me);
@@ -327,6 +329,7 @@ export class Family extends DurableObject {
       month, today: this.today(),
       family: { name: this.get("name"), code: this.get("code"), members: this.get("members", []) },
       categories: this.get("categories", DEFAULT_CATEGORIES),
+      cars: this.cars(), places: this.get("places", []),
       budget: this.get("budget", { total: 0, cats: {} }),
       fixed: this.sql.exec("SELECT * FROM fixed ORDER BY day, id").toArray(),
       entries, trend, prevCats,
@@ -392,6 +395,54 @@ export class Family extends DurableObject {
     ).toArray();
     if (!rows.length) return { error: "이미 지워진 항목이에요", status: 404 };
     return { fixed: rows[0] };
+  }
+
+  // ───── 주차 위치 ─────
+  cars() {
+    return this.get("cars", [{ id: "car1", name: "우리 차", spot: null }]);
+  }
+  parking(id, spot, method, b, me) {
+    b = b || {};
+    let cars = this.cars();
+    if (!id && method === "POST") {
+      if (cars.length >= 5) return { error: "차는 5대까지예요" };
+      const name = cleanText(b.name, 12);
+      if (!name) return { error: "차 이름을 적어 주세요" };
+      const car = { id: "c" + randomHex(4), name, spot: null };
+      cars.push(car); this.set("cars", cars);
+      return { cars };
+    }
+    const car = cars.find((c) => c.id === id);
+    if (!car) return { error: "없는 차예요", status: 404 };
+    if (spot && method === "PUT") {
+      const floor = cleanText(b.floor, 6);
+      const zone = cleanText(b.zone, 4);
+      if (!/^(B[1-9]|[1-9]F|지상)$/.test(floor)) return { error: "층을 골라 주세요" };
+      if (!/^[A-F][1-4]$/.test(zone)) return { error: "안내도에서 자리를 눌러 주세요" };
+      const place = cleanText(b.place, 16) || "집";
+      car.spot = { place, floor, zone, pillar: cleanText(b.pillar, 10), memo: cleanText(b.memo, 60), by: me, at: this.now() };
+      this.set("cars", cars);
+      // 최근 장소 (앞쪽이 최근, 6개)
+      const places = [place, ...this.get("places", []).filter((p) => p !== place)].slice(0, 6);
+      this.set("places", places);
+      return { cars, places };
+    }
+    if (spot && method === "DELETE") {
+      car.spot = null; this.set("cars", cars);
+      return { cars };
+    }
+    if (method === "PUT") {
+      const name = cleanText(b.name, 12);
+      if (!name) return { error: "차 이름을 적어 주세요" };
+      car.name = name; this.set("cars", cars);
+      return { cars };
+    }
+    if (method === "DELETE") {
+      if (cars.length <= 1) return { error: "차가 한 대는 있어야 해요" };
+      cars = cars.filter((c) => c.id !== id); this.set("cars", cars);
+      return { cars };
+    }
+    return { error: "없는 주소예요", status: 404 };
   }
 
   saveSettings(b) {
